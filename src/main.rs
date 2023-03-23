@@ -5,7 +5,9 @@ struct Vec3{
 }
 
 impl Vec3 {
-    fn 
+    fn dot(){
+        
+    }
 }
 
 fn main() {
