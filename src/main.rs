@@ -142,6 +142,7 @@ impl Sphere {
     fn intersect(self, r: &Ray) -> f32 {
         let op = self.pos - r.o;
         let eps: f32 = 1e-4;
+        // let eps = f32::EPSILON;
         let b: f32 = op.dot(r.d);
         let mut dt: f32 = b * b - op.dot(op) + self.radius * self.radius;
         if dt < 0.0 {
@@ -162,13 +163,15 @@ impl Sphere {
 }
 
 fn toInt(x: f32) -> i32 {
-    let x = 0.5 + 255.0 * x.clamp(0.0, 0.99999).powf(1.0 / 2.2);
+    // let x = 0.5 + 255.0 * x.clamp(0.0, 0.99999).powf(1.0 / 2.2);
+    let x = 0.5 + 255.0 * x.clamp(0.0, 0.99999);
     x as i32
 }
 
 fn intersect(spheres: &Vec<Sphere>, r: &Ray) -> (bool, f32, usize) {
     let n = spheres.len();
-    let inf = f32::INFINITY;
+    // let inf = f32::INFINITY;
+    let inf = 1e20;
     let mut t = inf;
     let mut id = 0usize;
     for i in 0..n {
@@ -190,7 +193,7 @@ fn radiance(spheres: &Vec<Sphere>, r: &Ray, depth: i32) -> Vec3 {
     let res = intersect(spheres, r);
     t = res.1;
     id = res.2;
-    if !res.0 {
+    if !res.0 || depth > 50 {
         return Vec3 {
             x: 0.0,
             y: 0.0,
@@ -202,15 +205,8 @@ fn radiance(spheres: &Vec<Sphere>, r: &Ray, depth: i32) -> Vec3 {
     let n = (x - obj.pos).norm();
     let nl = if n.dot(r.d) < 0.0 { n } else { -n };
     let mut f = obj.color;
-    let p: f32 = if f.x > f.y && f.x > f.z {
-        f.x
-    } else {
-        if f.y > f.z {
-            f.y
-        } else {
-            f.z
-        }
-    };
+
+    let p = f.x.max(f.y.max(f.z));
     depth += 1;
     if (depth > 5) {
         if rng.gen::<f32>() < p {
@@ -226,41 +222,39 @@ fn radiance(spheres: &Vec<Sphere>, r: &Ray, depth: i32) -> Vec3 {
             let r2s = r2.sqrt();
             let w = nl;
             let u = if w.x.abs() > 0.1 {
-                return Vec3 {
+                Vec3 {
                     x: 0.0,
                     y: 1.0,
                     z: 0.0,
-                }
-                .cross(w)
-                .norm();
+                }.cross(w).norm()
             } else {
-                return Vec3 {
+                Vec3 {
                     x: 1.0,
                     y: 0.0,
                     z: 0.0,
                 }
                 .cross(w)
-                .norm();
+                .norm()
             };
             let v = w.cross(u);
             let d = (u * r1.cos() * r2s + v * r1.sin() * r2s + w * (1.0 - r2).sqrt()).norm();
-            return obj.emission + f.mult(radiance(spheres, &Ray { o: x, d: d }, depth));
+            return obj.emission + f.mult(radiance(spheres, &Ray { o: x.clone(), d: d.clone() }, depth.clone()));
         }
         Refl_t::SPEC => {
             return obj.emission
                 + f.mult(radiance(
                     spheres,
                     &Ray {
-                        o: x,
-                        d: r.d - n * 2.0 * n.dot(r.d),
+                        o: x.clone(),
+                        d: r.d.clone() - n.clone() * 2.0 * n.dot(r.d),
                     },
-                    depth,
+                    depth.clone(),
                 ));
         }
         Refl_t::REFR => {
             let reflRay = Ray {
-                o: x,
-                d: r.d - n * 2.0 * n.dot(r.d),
+                o: x.clone(),
+                d: r.d.clone() - n.clone() * 2.0 * n.dot(r.d),
             };
             let into = n.dot(nl) > 0.0;
             let nc = 1.0;
@@ -288,11 +282,11 @@ fn radiance(spheres: &Vec<Sphere>, r: &Ray, depth: i32) -> Vec3 {
                     if rng.gen::<f32>() < P {
                         radiance(spheres, &reflRay, depth) * RP
                     } else {
-                        radiance(spheres, &Ray { o: x, d: tdir }, depth) * TP
+                        radiance(spheres, &Ray { o: x.clone(), d: tdir.clone() }, depth.clone()) * TP
                     }
                 } else {
                     radiance(spheres, &reflRay, depth) * Re
-                        + radiance(spheres, &Ray { o: x, d: tdir }, depth) * Tr
+                        + radiance(spheres, &Ray { o: x.clone(), d: tdir.clone() }, depth.clone()) * Tr
                 });
         }
     }
@@ -324,7 +318,7 @@ fn main() {
             pos: Vec3 {
                 x: -1e5f32 + 99f32,
                 y: 40.8f32,
-                z: 81.3f32,
+                z: 81.6f32,
             },
             emission: Vec3 {
                 x: 0f32,
@@ -380,8 +374,8 @@ fn main() {
             radius: 1e5,
             pos: Vec3 {
                 x: 50.0,
-                y: 40.8,
-                z: -1e5 + 170f32,
+                y: 1e5,
+                z: 81.6,
             },
             emission: Vec3 {
                 x: 0f32,
@@ -479,8 +473,8 @@ fn main() {
     color_buffer.resize(
         size,
         Vec3 {
-            x: 0.5,
-            y: 0.5,
+            x: 0.0,
+            y: 0.0,
             z: 0.0,
         },
     );
@@ -503,9 +497,9 @@ fn main() {
         z: 0.0,
     };
     let cy = cx.cross(cam.d).norm() * 0.5135;
-    let mut r = Vec3 {
-        ..Default::default()
-    };
+    // let mut r = Vec3 {
+    //     ..Default::default()
+    // };
 
     let args = env::args();
     let argc = args.len();
@@ -519,56 +513,38 @@ fn main() {
     }
     let mut rng = rand::thread_rng();
 
-    // render test
-    assert_eq!(
-        Vec3 {
-            x: 3.0,
-            y: 3.0,
-            z: 9.0
-        },
-        radiance(
-            &spheres,
-            &Ray {
-                o: Vec3 {
-                    x: 87.208499,
-                    y: 67.047286,
-                    z: 161.476524
-                },
-                d: Vec3 {
-                    x: 0.265775,
-                    y: 0.107481,
-                    z: -0.958025
-                }
-            },
-            0
-        )
-    );
-
     // render
     for y in 0..hight {
-        println!("\rRendering ({}/{} spp)", y, hight);
+        println!("Rendering ({}/{} spp)", y, hight);
+        
         for x in 0..width {
             let i = (hight - y - 1) * width + x;
             for sx in 0..2 {
                 for sy in 0..2 {
-                    r = Vec3 {
-                        ..Default::default()
+                    let mut r = Vec3 {
+                        x:0.0,y:0.0,z:0.0
                     };
                     for s in 0..simple {
                         let r1 = 2.0 * rng.gen::<f32>();
+                        assert!(r1<=2.0);
+                        assert!(0.0<=r1);
                         let dx = if r1 < 1.0 {
                             r1.sqrt() - 1.0
                         } else {
                             1.0 - (2.0 - r1).sqrt()
                         };
                         let r2 = 2.0 * rng.gen::<f32>();
+                        assert!(r2<=2.0);
+                        assert!(0.0<=r2);
                         let dy = if r2 < 1.0 {
                             r2.sqrt() - 1.0
                         } else {
                             1.0 - (2.0 - r2).sqrt()
                         };
                         let d =
-                            cx * (((sx as f32 + 0.5 + dy) / 2.0 + x as f32) / width as f32 - 0.5);
+                            cx * (((sx as f32 + 0.5 + dx) / 2.0 + x as f32) / width as f32 - 0.5)+
+                            cy * (((sy as f32 + 0.5 + dy) / 2.0 + y as f32) / hight as f32 - 0.5)+
+                            cam.d;
                         let depth = 0;
                         r = r + radiance(
                             &spheres,
